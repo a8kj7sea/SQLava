@@ -91,7 +91,7 @@ public class Test {
 
         connection = new MySQLConnection(mysql_creds);
         connection.connect(result -> {
-            if (result.getException().isEmpty()) {
+            if (result.getException().isPresent()) {
                 result.getException().get().printStackTrace();
                 return;
             }
