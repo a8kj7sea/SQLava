@@ -78,8 +78,7 @@ dependencies {
  * <li>Handling connection errors properly using {@link ConnectionResult}</li>
  * </ul>
  * </p>
- * 
- * Author: <a href="https://github.com/Cobeine">Cobeine</a>
+ * * Author: <a href="https://github.com/Cobeine">Cobeine</a>
  */
 public class Examples {
 
@@ -111,15 +110,18 @@ public class Examples {
         ConnectionResult result = connection.connect();
 
         if (result.isFailure()) {
-            // Handle connection failure
-            result.getError().ifPresent(e -> e.causeOptional().ifPresent(Throwable::printStackTrace));
+            // Handle connection failure using the new result pattern
+            result.error().ifPresent(error -> {
+                System.err.println("Connection Failed: " + error.message());
+                error.causeOptional().ifPresent(Throwable::printStackTrace);
+            });
             return;
         }
 
         // Successfully connected
         TableCommands tableCommands = connection.getTableCommands();
 
-        // Step 5: Create tables
+        // Step 5: Create tables (Synchronous and Asynchronous)
         tableCommands.createTable(new ExampleTable());
         tableCommands.createTable(new ExampleTable(), tableResult -> {
             if (tableResult.getException().isPresent()) {
@@ -166,7 +168,7 @@ public class Examples {
                     // Successfully executed update
                 });
     }
-    
+
 }
 
 ```
