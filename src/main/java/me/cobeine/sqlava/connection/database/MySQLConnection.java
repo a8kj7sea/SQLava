@@ -42,11 +42,6 @@ public class MySQLConnection implements
     private HikariDataSource dataSource;
     private final TableCommands tableCommands;
 
-    /**
-     * Creates a new MySQL connection with the given credentials.
-     *
-     * @param record the credentials holder
-     */
     public MySQLConnection(CredentialsHolder record) {
         this.credentialsHolder = record;
         this.tableCommands = new TableCommands(this);
@@ -54,77 +49,51 @@ public class MySQLConnection implements
     }
 
     /**
-     * Attempts to connect to the database and executes the given callback
-     * with success (0) or failure (-1).
-     * <p>
-     * Steps:
-     * <ol>
-     * <li>Invoke {@link #connect()} to attempt connection</li>
-     * <li>If successful, call the callback with <code>(0, null)</code></li>
-     * <li>If failed, call the callback with <code>(-1, exception)</code></li>
-     * </ol>
-     *
-     * @param callback the callback to notify of connection result
+     * Attempts to connect and calls the callback with 0 for success or -1 for
+     * failure.
      */
-    public void connectWithFallback(Callback<Integer, Exception> callback) {
+    public void connectWithFallback(Callback<Integer, SQLException> callback) {
         try {
             connect();
             callback.call(0, null);
-        } catch (Exception e) {
+        } catch (SQLException e) {
             callback.call(-1, e);
         }
     }
 
     /**
-     * Attempts to establish a connection to the database with optional
-     * configuration overrides.
-     * <p>
-     * Steps:
-     * <ol>
-     * <li>Create a new {@link HikariConfig}</li>
-     * <li>Apply credentials (datasource, driver, URL, lifetime, pool size) if
-     * present</li>
-     * <li>Apply any additional customization from the given consumer</li>
-     * <li>Apply all additional credential properties into the config</li>
-     * <li>Initialize a new {@link HikariDataSource}</li>
-     * <li>Create a {@link ConnectionPool} that wraps the data source</li>
-     * <li>Test the connection by retrieving a {@link Connection}</li>
-     * <li>If successful, return {@link ConnectionResult#success(Connection)}</li>
-     * <li>If failure occurs, return
-     * {@link ConnectionResult#failure(ConnectionError)}</li>
-     * </ol>
-     *
-     * @param consumer optional consumer for customizing {@link HikariConfig}
-     * @return a {@link ConnectionResult} indicating success or failure
+     * Connects with optional HikariConfig customization.
      */
     public ConnectionResult connect(Consumer<HikariConfig> consumer) {
         HikariConfig config = new HikariConfig();
 
-        if (credentialsHolder.getProperty(BasicMySQLCredentials.DATASOURCE_CLASS_NAME, String.class) != null) {
-            config.setDataSourceClassName(
-                    credentialsHolder.getProperty(BasicMySQLCredentials.DATASOURCE_CLASS_NAME, String.class));
-        }
-        if (credentialsHolder.getProperty(BasicMySQLCredentials.DRIVER, String.class) != null) {
-            config.setDriverClassName(credentialsHolder.getProperty(BasicMySQLCredentials.DRIVER, String.class));
-        }
-        if (credentialsHolder.getProperty(BasicMySQLCredentials.JDBC_URL, String.class) != null) {
-            config.setJdbcUrl(credentialsHolder.getProperty(BasicMySQLCredentials.JDBC_URL, String.class));
-        }
-        if (credentialsHolder.getProperty(BasicMySQLCredentials.MAX_LIFETIME, Long.class) != null) {
-            config.setMaxLifetime(credentialsHolder.getProperty(BasicMySQLCredentials.MAX_LIFETIME, Long.class));
-        }
-        if (credentialsHolder.getProperty(BasicMySQLCredentials.POOL_SIZE, Integer.class) != null) {
-            config.setMaximumPoolSize(credentialsHolder.getProperty(BasicMySQLCredentials.POOL_SIZE, Integer.class));
-        }
+        String datasource = credentialsHolder.getProperty(BasicMySQLCredentials.DATASOURCE_CLASS_NAME, String.class);
+        if (datasource != null)
+            config.setDataSourceClassName(datasource);
 
-        if (consumer != null) {
+        String driver = credentialsHolder.getProperty(BasicMySQLCredentials.DRIVER, String.class);
+        if (driver != null)
+            config.setDriverClassName(driver);
+
+        String jdbcUrl = credentialsHolder.getProperty(BasicMySQLCredentials.JDBC_URL, String.class);
+        if (jdbcUrl != null)
+            config.setJdbcUrl(jdbcUrl);
+
+        Long maxLifetime = credentialsHolder.getProperty(BasicMySQLCredentials.MAX_LIFETIME, Long.class);
+        if (maxLifetime != null)
+            config.setMaxLifetime(maxLifetime);
+
+        Integer poolSize = credentialsHolder.getProperty(BasicMySQLCredentials.POOL_SIZE, Integer.class);
+        if (poolSize != null)
+            config.setMaximumPoolSize(poolSize);
+
+        if (consumer != null)
             consumer.accept(config);
-        }
 
-        for (CredentialsKey credentialsKey : credentialsHolder.keySet()) {
-            if (credentialsKey.isProperty()) {
-                config.addDataSourceProperty(credentialsKey.getKey(),
-                        credentialsHolder.getProperty(credentialsKey, credentialsKey.getDataType()));
+        for (CredentialsKey key : credentialsHolder.keySet()) {
+            if (key.isProperty()) {
+                Object value = credentialsHolder.getProperty(key, key.getDataType());
+                config.addDataSourceProperty(key.getKey(), value);
             }
         }
 
@@ -141,37 +110,28 @@ public class MySQLConnection implements
             }
         };
 
-        try (Connection conn = getPool().resource()) {
-            return ConnectionResult.success(conn);
-        } catch (Exception e) {
+        try (Connection conn = pool.resource()) {
+            if (conn != null) {
+                return ConnectionResult.success(conn);
+            } else {
+                return ConnectionResult
+                        .failure(ConnectionError.connectivityError("Failed to acquire a connection", null));
+            }
+        } catch (SQLException e) {
             return ConnectionResult.failure(ConnectionError.connectivityError("Failed to connect to MySQL", e));
         }
     }
 
     /**
      * Connects with default configuration.
-     * <p>
-     * Equivalent to calling {@link #connect(Consumer)} with {@code null}.
-     * </p>
-     *
-     * @return a {@link ConnectionResult} indicating success or failure
      */
     @Override
-    public ConnectionResult connect() {
+    public ConnectionResult connect() throws SQLException {
         return connect(null);
     }
 
     /**
      * Prepares a statement from a {@link Query}.
-     * <p>
-     * Steps:
-     * <ol>
-     * <li>Delegate to {@link Query#prepareStatement(MySQLConnection)}</li>
-     * <li>Return a {@link PreparedQuery} ready for execution</li>
-     * </ol>
-     *
-     * @param query the query abstraction
-     * @return a prepared query wrapper
      */
     public PreparedQuery prepareStatement(Query query) {
         return query.prepareStatement(this);
@@ -179,25 +139,13 @@ public class MySQLConnection implements
 
     /**
      * Prepares a statement directly from SQL string.
-     * <p>
-     * Steps:
-     * <ol>
-     * <li>Create a new {@link PreparedQuery} with this connection and the given SQL
-     * string</li>
-     * <li>Return the {@link PreparedQuery} instance</li>
-     * </ol>
-     *
-     * @param query the raw SQL string
-     * @return a prepared query wrapper
      */
     public PreparedQuery prepareStatement(String query) {
         return new PreparedQuery(this, query);
     }
 
     /**
-     * Returns the underlying {@link HikariDataSource}.
-     *
-     * @return the data source
+     * Returns the underlying HikariDataSource.
      */
     @Override
     public HikariDataSource getConnection() {

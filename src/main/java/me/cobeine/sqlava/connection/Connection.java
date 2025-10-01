@@ -2,6 +2,7 @@ package me.cobeine.sqlava.connection;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.sql.SQLException;
 
 /**
  * @Author <a href="https://github.com/Cobeine">Cobeine</a>
@@ -11,7 +12,7 @@ public interface Connection<C> {
 
     C getConnection();
 
-    ConnectionResult connect();
+    ConnectionResult connect() throws SQLException;
 
     default void closeConnection() {
         if (getConnection() instanceof Closeable){

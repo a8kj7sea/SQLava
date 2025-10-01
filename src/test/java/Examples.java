@@ -1,4 +1,3 @@
-
 import me.cobeine.sqlava.connection.ConnectionResult;
 import me.cobeine.sqlava.connection.auth.BasicMySQLCredentials;
 import me.cobeine.sqlava.connection.auth.CredentialsHolder;
@@ -7,6 +6,8 @@ import me.cobeine.sqlava.connection.database.query.PreparedQuery;
 import me.cobeine.sqlava.connection.database.query.Query;
 import me.cobeine.sqlava.connection.database.table.TableCommands;
 import me.cobeine.sqlava.connection.util.JdbcUrlBuilder;
+
+import java.sql.SQLException;
 
 /**
  * Example usage of {@link MySQLConnection}, queries, and table commands.
@@ -19,14 +20,12 @@ import me.cobeine.sqlava.connection.util.JdbcUrlBuilder;
  * <li>Handling connection errors properly using {@link ConnectionResult}</li>
  * </ul>
  * </p>
- * 
+ *
  * Author: <a href="https://github.com/Cobeine">Cobeine</a>
  */
 public class Examples {
 
-    private final MySQLConnection connection;
-
-    public Examples() throws Exception {
+    public Examples() throws SQLException {
         // Step 1: Build JDBC URL
         String url = JdbcUrlBuilder.newBuilder()
                 .host("host")
@@ -46,32 +45,30 @@ public class Examples {
                 .build();
 
         // Step 3: Initialize MySQL connection
-        connection = new MySQLConnection(mysqlCreds);
+        MySQLConnection conn = new MySQLConnection(mysqlCreds);
 
         // Step 4: Connect to the database and handle result
-        ConnectionResult result = connection.connect();
+        ConnectionResult result = conn.connect();
 
         if (result.isFailure()) {
             // Handle connection failure
-            result.getError().ifPresent(e -> e.causeOptional().ifPresent(Throwable::printStackTrace));
+            result.getError().ifPresent(error -> {
+                error.causeOptional().ifPresent(Throwable::printStackTrace);
+            });
             return;
         }
 
         // Successfully connected
-        TableCommands tableCommands = connection.getTableCommands();
+        TableCommands tableCommands = conn.getTableCommands();
 
         // Step 5: Create tables
         tableCommands.createTable(new ExampleTable());
         tableCommands.createTable(new ExampleTable(), tableResult -> {
-            if (tableResult.getException().isPresent()) {
-                tableResult.getException().get().printStackTrace();
-                return;
-            }
-            // Table successfully created
+            tableResult.getException().ifPresent(Throwable::printStackTrace);
         });
 
         // Step 6: Prepare queries
-        PreparedQuery selectQuery = connection.prepareStatement(
+        PreparedQuery selectQuery = conn.prepareStatement(
                 Query.select("example").where("uuid", "test"));
 
         // Step 7: Execute query synchronously
@@ -79,11 +76,7 @@ public class Examples {
 
         // Step 8: Execute query asynchronously
         selectQuery.executeQueryAsync(asyncResult -> {
-            if (asyncResult.getException().isPresent()) {
-                asyncResult.getException().get().printStackTrace();
-                return;
-            }
-            // Successfully executed query
+            asyncResult.getException().ifPresent(Throwable::printStackTrace);
             asyncResult.getResult().ifPresent(resultSet -> {
                 // Process ResultSet here
             });
@@ -95,24 +88,13 @@ public class Examples {
                 .where("id", 1)
                 .and("uuid", "test2");
 
-        connection.prepareStatement(updateQuery)
+        conn.prepareStatement(updateQuery)
                 .setParameter(1, "test")
                 .setParameter(2, 1)
                 .setParameter(3, "test2")
                 .executeUpdateAsync(updateResult -> {
-                    if (updateResult.getException().isPresent()) {
-                        updateResult.getException().get().printStackTrace();
-                        return;
-                    }
-                    // Successfully executed update
+                    updateResult.getException().ifPresent(Throwable::printStackTrace);
                 });
     }
 
-    public static void main(String[] args) {
-        try {
-            new Examples();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
 }

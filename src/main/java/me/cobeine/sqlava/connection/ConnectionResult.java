@@ -26,8 +26,11 @@ public final class ConnectionResult {
 
     // ---------- Factory Constants ----------
 
-    public static final ConnectionResult SUCCESS = new ConnectionResult(Optional.empty(), Optional.empty());
-    public static final ConnectionResult FAIL = new ConnectionResult(Optional.empty(), Optional.empty());
+    /** Predefined instance representing a successful connection (no error). */
+    public static final ConnectionResult SUCCESS_RESULT = new ConnectionResult(Optional.empty(), Optional.empty());
+
+    /** Predefined instance representing a failed connection (no connection). */
+    public static final ConnectionResult FAILURE_RESULT = new ConnectionResult(Optional.empty(), Optional.empty());
 
     /**
      * Creates a new ConnectionResult.
@@ -127,17 +130,27 @@ public final class ConnectionResult {
     }
 
     /**
-     * Returns the connection if successful, or throws a {@link RuntimeException}
+     * Returns the connection if successful, or throws a {@link ConnectionException}
      * wrapping the error message and cause if failed.
      *
      * @return the established {@link Connection}
-     * @throws RuntimeException if this result represents a failure
+     * @throws ConnectionException if this result represents a failure
      */
     public Connection getOrThrow() {
         if (isSuccess()) {
             return connection.get();
         }
-        throw new RuntimeException(error.map(ConnectionError::getMessage).orElse("Unknown connection error"));
+        throw new ConnectionException(
+                error.map(ConnectionError::getMessage).orElse("Unknown connection error"),
+                error.flatMap(ConnectionError::causeOptional).orElse(null));
     }
 
+    /**
+     * Custom exception for connection failures to avoid raw RuntimeException usage.
+     */
+    public static class ConnectionException extends RuntimeException {
+        public ConnectionException(String message, Throwable cause) {
+            super(message, cause);
+        }
+    }
 }
