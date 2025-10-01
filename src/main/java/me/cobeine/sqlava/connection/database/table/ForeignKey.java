@@ -1,6 +1,5 @@
 package me.cobeine.sqlava.connection.database.table;
 
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
 /**

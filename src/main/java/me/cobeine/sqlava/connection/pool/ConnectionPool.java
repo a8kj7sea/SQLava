@@ -1,7 +1,5 @@
 package me.cobeine.sqlava.connection.pool;
 
-import lombok.Getter;
-
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
