@@ -51,6 +51,7 @@ public class Examples {
         ConnectionResult result = conn.connect();
 
         if (result.isFailure()) {
+            // Handle connection failure
             result.getError().ifPresent(error -> {
                 error.causeOptional().ifPresent(Throwable::printStackTrace);
             });
@@ -60,52 +61,40 @@ public class Examples {
         // Successfully connected
         TableCommands tableCommands = conn.getTableCommands();
 
-        // Step 5: Create tables safely
-        ExampleTable exampleTable = new ExampleTable();
-        tableCommands.createTable(exampleTable);
-
-        tableCommands.createTable(exampleTable, tableResult -> {
-            if (tableResult.getException().isPresent()) {
-                Throwable ex = tableResult.getException().get();
-                ex.printStackTrace();
-            }
+        // Step 5: Create tables
+        tableCommands.createTable(new ExampleTable());
+        tableCommands.createTable(new ExampleTable(), tableResult -> {
+            tableResult.getException().ifPresent(Throwable::printStackTrace);
         });
 
-        // Step 6: Prepare a query
-        Query selectQueryBuilder = Query.select("example").where("uuid", "test");
-        PreparedQuery selectQuery = conn.prepareStatement(selectQueryBuilder);
+        // Step 6: Prepare queries
+        PreparedQuery selectQuery = conn.prepareStatement(
+                Query.select("example").where("uuid", "test"));
 
         // Step 7: Execute query synchronously
         selectQuery.executeQuery();
 
         // Step 8: Execute query asynchronously
         selectQuery.executeQueryAsync(asyncResult -> {
-            if (asyncResult.getException().isPresent()) {
-                Throwable ex = asyncResult.getException().get();
-                ex.printStackTrace();
-            }
+            asyncResult.getException().ifPresent(Throwable::printStackTrace);
             asyncResult.getResult().ifPresent(resultSet -> {
                 // Process ResultSet here
             });
         });
 
-        // Step 9: Prepare and execute update query safely
-        Query updateQueryBuilder = Query.update("example")
+        // Step 9: Prepare and execute update query
+        Query updateQuery = Query.update("example")
                 .set("uuid", "test")
                 .where("id", 1)
                 .and("uuid", "test2");
 
-        PreparedQuery updateQuery = conn.prepareStatement(updateQueryBuilder);
-        updateQuery.setParameter(1, "test");
-        updateQuery.setParameter(2, 1);
-        updateQuery.setParameter(3, "test2");
-
-        updateQuery.executeUpdateAsync(updateResult -> {
-            if (updateResult.getException().isPresent()) {
-                Throwable ex = updateResult.getException().get();
-                ex.printStackTrace();
-            }
-        });
+        conn.prepareStatement(updateQuery)
+                .setParameter(1, "test")
+                .setParameter(2, 1)
+                .setParameter(3, "test2")
+                .executeUpdateAsync(updateResult -> {
+                    updateResult.getException().ifPresent(Throwable::printStackTrace);
+                });
     }
 
 }

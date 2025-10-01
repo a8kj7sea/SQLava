@@ -22,32 +22,14 @@ import java.util.function.Consumer;
 import java.util.logging.Logger;
 
 /**
- * Represents a MySQL database connection using HikariCP for connection pooling.
+ * Represents a MySQL database connection using HikariCP for pooling.
  * <p>
- * This class manages HikariDataSource configuration, initialization, and a
- * connection pool.
- * It provides methods to connect to the database, prepare SQL statements, and
- * handle errors
- * using the {@link ConnectionResult} pattern instead of raw exceptions.
+ * This class wraps the configuration and initialization of a
+ * {@link HikariDataSource}, manages a connection pool,
+ * and provides helper methods for preparing queries.
  * </p>
  *
- * <p>
- * Example usage:
- * 
- * <pre>
- * CredentialsHolder creds = ...;
- * MySQLConnection connection = new MySQLConnection(creds);
- * ConnectionResult result = connection.connect();
- * if (result.isSuccess()) {
- *     // use result.getConnection()
- * } else {
- *     // handle error
- * }
- * </pre>
- * </p>
- *
- * @author
- *         <a href="https://github.com/Cobeine">Cobeine</a>
+ * @author <a href="https://github.com/Cobeine">Cobeine</a>
  */
 @Getter
 public class MySQLConnection implements
@@ -60,13 +42,6 @@ public class MySQLConnection implements
     private HikariDataSource dataSource;
     private final TableCommands tableCommands;
 
-    /**
-     * Constructs a new {@code MySQLConnection} instance with the provided
-     * credentials.
-     *
-     * @param record the credentials holder containing database connection
-     *               properties
-     */
     public MySQLConnection(CredentialsHolder record) {
         this.credentialsHolder = record;
         this.tableCommands = new TableCommands(this);
@@ -74,11 +49,8 @@ public class MySQLConnection implements
     }
 
     /**
-     * Attempts to connect to the database and notifies the provided callback with
-     * 0 for success or -1 for failure.
-     *
-     * @param callback a {@link Callback} that receives the result status and any
-     *                 {@link SQLException} if failed
+     * Attempts to connect and calls the callback with 0 for success or -1 for
+     * failure.
      */
     public void connectWithFallback(Callback<Integer, SQLException> callback) {
         try {
@@ -90,37 +62,18 @@ public class MySQLConnection implements
     }
 
     /**
-     * Connects to the MySQL database with optional {@link HikariConfig}
-     * customization.
-     *
-     * <p>
-     * The method performs the following steps:
-     * <ul>
-     * <li>Reads configuration from {@link CredentialsHolder}</li>
-     * <li>Applies any overrides provided via the {@code consumer}</li>
-     * <li>Initializes HikariDataSource and a connection pool</li>
-     * <li>Attempts to acquire a connection to test the configuration</li>
-     * <li>Returns a {@link ConnectionResult} indicating success or failure</li>
-     * </ul>
-     * </p>
-     *
-     * @param consumer optional consumer to customize {@link HikariConfig} before
-     *                 creating the datasource
-     * @return a {@link ConnectionResult} representing the success or failure of the
-     *         connection attempt
+     * Connects with optional HikariConfig customization.
      */
     public ConnectionResult connect(Consumer<HikariConfig> consumer) {
         HikariConfig config = new HikariConfig();
 
-        // Extract configuration values from credentials holder
-        String datasourceClass = credentialsHolder.getProperty(BasicMySQLCredentials.DATASOURCE_CLASS_NAME,
-                String.class);
-        if (datasourceClass != null)
-            config.setDataSourceClassName(datasourceClass);
+        String datasource = credentialsHolder.getProperty(BasicMySQLCredentials.DATASOURCE_CLASS_NAME, String.class);
+        if (datasource != null)
+            config.setDataSourceClassName(datasource);
 
-        String driverClass = credentialsHolder.getProperty(BasicMySQLCredentials.DRIVER, String.class);
-        if (driverClass != null)
-            config.setDriverClassName(driverClass);
+        String driver = credentialsHolder.getProperty(BasicMySQLCredentials.DRIVER, String.class);
+        if (driver != null)
+            config.setDriverClassName(driver);
 
         String jdbcUrl = credentialsHolder.getProperty(BasicMySQLCredentials.JDBC_URL, String.class);
         if (jdbcUrl != null)
@@ -137,7 +90,6 @@ public class MySQLConnection implements
         if (consumer != null)
             consumer.accept(config);
 
-        // Add extra datasource properties
         for (CredentialsKey key : credentialsHolder.keySet()) {
             if (key.isProperty()) {
                 Object value = credentialsHolder.getProperty(key, key.getDataType());
@@ -145,7 +97,6 @@ public class MySQLConnection implements
             }
         }
 
-        // Initialize datasource and pool
         dataSource = new HikariDataSource(config);
         this.pool = new ConnectionPool<>(dataSource) {
             @Override
@@ -159,25 +110,20 @@ public class MySQLConnection implements
             }
         };
 
-        // Test connection
         try (Connection conn = pool.resource()) {
             if (conn != null) {
                 return ConnectionResult.success(conn);
             } else {
-                return ConnectionResult.failure(
-                        ConnectionError.connectivityError("Failed to acquire a connection", null));
+                return ConnectionResult
+                        .failure(ConnectionError.connectivityError("Failed to acquire a connection", null));
             }
         } catch (SQLException e) {
-            return ConnectionResult.failure(
-                    ConnectionError.connectivityError("Failed to connect to MySQL", e));
+            return ConnectionResult.failure(ConnectionError.connectivityError("Failed to connect to MySQL", e));
         }
     }
 
     /**
-     * Connects to the MySQL database using default configuration.
-     *
-     * @return a {@link ConnectionResult} indicating success or failure
-     * @throws SQLException if an SQL error occurs during connection
+     * Connects with default configuration.
      */
     @Override
     public ConnectionResult connect() throws SQLException {
@@ -185,29 +131,21 @@ public class MySQLConnection implements
     }
 
     /**
-     * Prepares a SQL statement from a {@link Query} object.
-     *
-     * @param query the {@link Query} to prepare
-     * @return a {@link PreparedQuery} ready for execution
+     * Prepares a statement from a {@link Query}.
      */
     public PreparedQuery prepareStatement(Query query) {
         return query.prepareStatement(this);
     }
 
     /**
-     * Prepares a SQL statement directly from a raw SQL string.
-     *
-     * @param query the SQL string
-     * @return a {@link PreparedQuery} ready for execution
+     * Prepares a statement directly from SQL string.
      */
     public PreparedQuery prepareStatement(String query) {
         return new PreparedQuery(this, query);
     }
 
     /**
-     * Returns the underlying {@link HikariDataSource} used by this connection.
-     *
-     * @return the HikariDataSource
+     * Returns the underlying HikariDataSource.
      */
     @Override
     public HikariDataSource getConnection() {
